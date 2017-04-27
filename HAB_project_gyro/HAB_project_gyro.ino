@@ -28,8 +28,7 @@
 #include <Servo.h>
 Servo servo;
 
-#define AHRS true         // Set to false for basic data read
-#define SerialDebug true  // Set to true to get Serial output for debugging
+#define AHRS false         // Set to false for basic data read
 
 // Pin definitions
 int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
@@ -63,12 +62,6 @@ void setup()
 
     // Start by performing self test and reporting values
     myIMU.MPU9250SelfTest(myIMU.selfTest);
-    Serial.print(F("x-axis self test: acceleration trim within : "));
-    Serial.print(myIMU.selfTest[0],1); Serial.println("% of factory value");
-    Serial.print(F("y-axis self test: acceleration trim within : "));
-    Serial.print(myIMU.selfTest[1],1); Serial.println("% of factory value");
-    Serial.print(F("z-axis self test: acceleration trim within : "));
-    Serial.print(myIMU.selfTest[2],1); Serial.println("% of factory value");
     Serial.print(F("x-axis self test: gyration trim within : "));
     Serial.print(myIMU.selfTest[3],1); Serial.println("% of factory value");
     Serial.print(F("y-axis self test: gyration trim within : "));
@@ -102,39 +95,11 @@ void setup()
 //      abort();
 //    }
 
-    // Get magnetometer calibration from AK8963 ROM
-    myIMU.initAK8963(myIMU.factoryMagCalibration);
-    // Initialize device for active mode read of magnetometer
-    Serial.println("AK8963 initialized for active data mode....");
-
-    if (SerialDebug)
-    {
-      //  Serial.println("Calibration values: ");
-      Serial.print("X-Axis factory sensitivity adjustment value ");
-      Serial.println(myIMU.factoryMagCalibration[0], 2);
-      Serial.print("Y-Axis factory sensitivity adjustment value ");
-      Serial.println(myIMU.factoryMagCalibration[1], 2);
-      Serial.print("Z-Axis factory sensitivity adjustment value ");
-      Serial.println(myIMU.factoryMagCalibration[2], 2);
-    }
-
     // Get sensor resolutions, only need to do this once
     myIMU.getAres();
     myIMU.getGres();
     myIMU.getMres();
 
-    // The next call delays for 4 seconds, and then records about 15 seconds of
-    // data to calculate bias and scale.
-    myIMU.magCalMPU9250(myIMU.magBias, myIMU.magScale);
-    Serial.println("AK8963 mag biases (mG)");
-    Serial.println(myIMU.magBias[0]);
-    Serial.println(myIMU.magBias[1]);
-    Serial.println(myIMU.magBias[2]);
-
-    Serial.println("AK8963 mag scale (mG)");
-    Serial.println(myIMU.magScale[0]);
-    Serial.println(myIMU.magScale[1]);
-    Serial.println(myIMU.magScale[2]);
     delay(2000); // Add delay to see results before serial spew of data
 
   } // if (c == 0x71)
@@ -164,23 +129,6 @@ void loop()
     myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
     myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
     myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
-    rate = myIMU.gz;
-    angle += prev_rate + rate;
-    prev_rate = rate;
-    if (angle 
-
-    myIMU.readMagData(myIMU.magCount);  // Read the x/y/z adc values
-
-    // Calculate the magnetometer values in milliGauss
-    // Include factory calibration per data sheet and user environmental
-    // corrections
-    // Get actual magnetometer value, this depends on scale being set
-    myIMU.mx = (float)myIMU.magCount[0] * myIMU.mRes
-               * myIMU.factoryMagCalibration[0] - myIMU.magBias[0];
-    myIMU.my = (float)myIMU.magCount[1] * myIMU.mRes
-               * myIMU.factoryMagCalibration[1] - myIMU.magBias[1];
-    myIMU.mz = (float)myIMU.magCount[2] * myIMU.mRes
-               * myIMU.factoryMagCalibration[2] - myIMU.magBias[2];
   } // if (readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01)
 
   // Must be called before updating quaternions!
@@ -191,8 +139,6 @@ void loop()
     myIMU.delt_t = millis() - myIMU.count;
     if (myIMU.delt_t > 500)
     {
-      if(SerialDebug)
-      {
 
         // Print gyro values in degree/sec
         Serial.print("X-gyro rate: "); Serial.print(myIMU.gx, 3);
@@ -207,14 +153,14 @@ void loop()
         myIMU.temperature = ((float) myIMU.tempCount) / 333.87 + 21.0;
         // Print temperature in degrees Centigrade
         Serial.print("Temperature is ");  Serial.print(myIMU.temperature, 1);
-        Serial.println(" degrees C");
-      }
 
       // Reset IMU count to current time.
       myIMU.count = millis();
       digitalWrite(myLed, !digitalRead(myLed));  // toggle led
     } // if (myIMU.delt_t > 500)
-  } // if (!AHRS)
+  } 
+  
+  // if (!AHRS)
   else
   {
     // Serial print and/or display at 0.5 s rate independent of data rates
@@ -223,13 +169,10 @@ void loop()
     // update LCD once per second independent of read rate
     if (myIMU.delt_t > 1000)
     {
-      if(SerialDebug)
-      {
 //        Serial.print("gyro x = ");  Serial.print(myIMU.gx, 2);
 //        Serial.print(" gyro y = "); Serial.print(myIMU.gy, 2);
         Serial.print(" gyro z = "); Serial.print(myIMU.gz, 2);
         Serial.println(" deg/s");
-      }
 
       myIMU.count = millis();
       myIMU.sumCount = 0;
