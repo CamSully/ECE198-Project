@@ -1,6 +1,6 @@
-/*  Cameron and Dustin's ECE 198 Camera payload stabilization code for the Sparkfun MPU9250 Inertial Measurement Unit
+/*  Cameron and Dustin's ECE 198 Camera payload stabilization code for the Sparkfun MPU9250 Inertial Measurement Unit.
  *  This code only uses the gyro sensor in the IMU.
- *  To stabilize the payload, we read the angular velocity in degrees per second, and integrate to obtain heading it degrees.
+ *  To stabilize the payload, we read the angular velocity in degrees per second, and integrate to obtain heading in degrees.
  *  With the heading, we use an algorithm to set the servo to the proper angle to rotate the box back to its initial heading.
  */
  
@@ -59,6 +59,8 @@ void setup()
 
 void loop()
 {
+  float headingDegrees;
+  
   // If intPin goes high, all data registers have new data
   // On interrupt, check if data ready interrupt
   if (myIMU.readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01)
@@ -66,8 +68,7 @@ void loop()
 
     myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
 
-    // Calculate the gyro value into actual degrees per second
-    // This depends on scale being set
+    // Calculate the gyro value into degrees per second.This depends on scale being set.
     myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
     myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
     myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
@@ -76,10 +77,13 @@ void loop()
   // Must be called before updating quaternions.
   myIMU.updateTime();
 
+  // INITIAL: WAIT FOR BOX TO BE VERTICAL, THEN START STABILIZING.
+
   // INTEGRATE TO GET HEADING.
+  // headingDegrees = getHeading(myIMU.gz);
 
   // STABILIZE
-
+  // stabilize(headingDegrees);
 
   if (!AHRS)
   {
@@ -106,6 +110,44 @@ void loop()
       digitalWrite(myLed, !digitalRead(myLed));  // toggle led
     }
   }
+}
+
+
+
+float getHeading(float angularVelocity) {
+  //Dustin Starting Attempt to integrate integration code
+  //1st measures rotational velocity
+
+  unsigned long time;
+  int sampleTime = 10;
+  int rate;
+  int prev_rate = 0;
+  double angle = 0;
+
+  //Every 10 ms, it takes a sample from the gyro:
+  if(millis() - time > sampleTime) {
+    time = millis(); //updates time to get the next sample
+// Don't need line below? Already read gyro.
+//    gyro.read();    //translate from gyro.read()    myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
+//    rate = ( (int)gyro.g.z - dc_offset) / 100; //gyro.g.z-dc_offset isn't a thing yet
+  //Printing rate
+    Serial.print("rate: "); Serial.println(rate); 
+    delay(7000);
+  //Measuring the Angle:
+    angle += ( (double)(prev_rate + rate) * sampleTime) / 2000;
+  //Making the rate into prev_rate for next loop:
+    prev_rate = rate;
+  //Keeps angle between 0-359 degrees:
+    if(angle < 0){
+        angle += 360;
+    }
+    else if(angle >= 360){
+      angle -= 360;
+    }
+  //Printing angle
+    Serial.print("\tangle: "); Serial.println(angle);
+  }
+  return angle;
 }
 
 
