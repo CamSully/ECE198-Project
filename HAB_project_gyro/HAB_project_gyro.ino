@@ -4,7 +4,7 @@
  *  With the heading, we use an algorithm to set the servo to the proper angle to rotate the box back to its initial heading.
  *  
  *  Note that the sensitivity of the Gyro is set in ~/Arduino/libraries/SparkFun_MPU9250/src/MPU9250.h
- *  The current sensitivity value is 250 degrees per second.
+ *  The current sensitivity value is 500 degrees per second.
  */
  
 // Initial IMU code obtained from:
@@ -77,7 +77,7 @@ void loop()
     myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
 
     // Calculate the gyro value into degrees per second. This depends on scale being set.
-    // SCALE IS 250 DPS
+    // SCALE IS 500 DPS
     myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
     myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
     myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
@@ -112,10 +112,10 @@ void loop()
       }
     }
     noise = noiseTotal / 500;
-    Serial.print("Noise: "); Serial.println(noise, 4);
+    // Add .05 to average noise to get a better value with less drift.
+    noise += 0.05;
+    Serial.print("Noise: "); Serial.println(noise, 4); Serial.println(" ");
 
-    // INFINITE LOOP FOR TESTING NOISE VALUES.
-    while(1);
     baselineTesting = false;
   }
 
@@ -144,6 +144,7 @@ void loop()
         Serial.print("Z: "); Serial.print(myIMU.gz, 3);
         Serial.println("   deg/s");
         Serial.print("Heading: "); Serial.println(headingDegrees);
+        Serial.println(" ");
 
         myIMU.tempCount = myIMU.readTempData();  // Read the adc values
         // Temperature in degrees Centigrade
@@ -170,15 +171,19 @@ float getHeading(void) {
   // 1st measures rotational velocity
 
   // Every 10 ms, it takes a sample from the gyro:
-  if(millis() - time > 10) {
+  float changeInTime = millis() - time;
+//  Serial.println("deltaT= "); Serial.println(changeInTime);
+  if(changeInTime > 5) {
+//    Serial.print("RUN -> deltaT = "); Serial.println(changeInTime);
     time = millis(); // Update time to get the next sample.
 
-    rate = (myIMU.gz - dc_offset);
+    // Make rate negative for clockwise to be positive values.
+    rate = -(myIMU.gz - dc_offset);
 
     if (rate >= noise || rate <= -noise) {
       // Trapezoidal method of integration:
       // Average of the two values * time between samples.
-      heading += ((prev_rate + rate)/ 2.0) * 0.01) ;
+      heading += ((prev_rate + rate)/ 2.0) * (changeInTime / 1000);
     }
     //Making the rate into prev_rate for next loop:
     prev_rate = rate;
@@ -253,7 +258,7 @@ void stabilize(float heading) {
 
     // Print every second (count is global).
   if ((count % 100) == 0) {
-    Serial.print("Heading: "); Serial.println(heading);
+    Serial.print("Heading: "); Serial.println(heading); Serial.println("");
     if (jumpedRTL) {
       Serial.println("jumpedRTL TRUE");
     }
