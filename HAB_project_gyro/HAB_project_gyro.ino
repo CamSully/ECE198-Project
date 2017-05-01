@@ -56,10 +56,11 @@ void setup()
 }
 
 
-
+bool baselineTesting = true;
+float dc_offset = 0;
+float headingDegrees;
 void loop()
 {
-  float headingDegrees;
   
   // If intPin goes high, all data registers have new data
   // On interrupt, check if data ready interrupt
@@ -74,13 +75,26 @@ void loop()
     myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
   } // if (readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01)
 
+  //Calculating intial DC offset and noise level of gyro
+  if (baselineTesting) {
+    for(int n = 0; n < 500; n++){
+      dc_offset += myIMU.gz;
+    }
+    dc_offset /= 500;
+  
+    //print dc offset and noise level
+    Serial.print("DC Offset: "); Serial.print(dc_offset);
+    Serial.println();
+    baselineTesting = false;
+  }
+
   // Must be called before updating quaternions.
   myIMU.updateTime();
 
   // INITIAL: WAIT FOR BOX TO BE VERTICAL, THEN START STABILIZING.
 
   // INTEGRATE TO GET HEADING.
-  // headingDegrees = getHeading(myIMU.gz);
+  headingDegrees = getHeading();
 
   // STABILIZE
   // stabilize(headingDegrees);
@@ -92,12 +106,13 @@ void loop()
     {
 
         // Print gyro values in degree/sec
-        Serial.print("GYRO- X: "); Serial.print(myIMU.gx, 3);
-        Serial.print(" ");
-        Serial.print("Y: "); Serial.print(myIMU.gy, 3);
-        Serial.print(" ");
+//        Serial.print("GYRO- X: "); Serial.print(myIMU.gx, 3);
+//        Serial.print(" ");
+//        Serial.print("Y: "); Serial.print(myIMU.gy, 3);
+//        Serial.print(" ");
         Serial.print("Z: "); Serial.print(myIMU.gz, 3);
         Serial.println("   deg/s");
+        Serial.print("Heading: "); Serial.println(headingDegrees);
 
         myIMU.tempCount = myIMU.readTempData();  // Read the adc values
         // Temperature in degrees Centigrade
@@ -113,39 +128,33 @@ void loop()
 }
 
 
-
-float getHeading(float angularVelocity) {
-  //Dustin Starting Attempt to integrate integration code
-  //1st measures rotational velocity
-
-  unsigned long time;
-  int sampleTime = 10;
-  int rate;
-  int prev_rate = 0;
-  double angle = 0;
+float prev_rate = 0;
+float angle = 0;
+unsigned long time = millis();
+float rate;
+float getHeading(void) {
+  // Dustin Starting Attempt to integrate integration code
+  // 1st measures rotational velocity
 
   //Every 10 ms, it takes a sample from the gyro:
-  if(millis() - time > sampleTime) {
+  if(millis() - time > 10) {
     time = millis(); //updates time to get the next sample
-// Don't need line below? Already read gyro.
-//    gyro.read();    //translate from gyro.read()    myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
-//    rate = ( (int)gyro.g.z - dc_offset) / 100; //gyro.g.z-dc_offset isn't a thing yet
-  //Printing rate
-    Serial.print("rate: "); Serial.println(rate); 
-    delay(7000);
-  //Measuring the Angle:
-    angle += ( (double)(prev_rate + rate) * sampleTime) / 2000;
-  //Making the rate into prev_rate for next loop:
+
+//    rate = (myIMU.gz - dc_offset);
+    rate = myIMU.gz;
+
+    // Measuring the Angle:
+    // previous rate + rate * sampleTime / 2
+    angle += (prev_rate + rate) / 2.0;
+    //Making the rate into prev_rate for next loop:
     prev_rate = rate;
-  //Keeps angle between 0-359 degrees:
+    // Keeps angle between 0-359 degrees:
     if(angle < 0){
         angle += 360;
     }
     else if(angle >= 360){
       angle -= 360;
     }
-  //Printing angle
-    Serial.print("\tangle: "); Serial.println(angle);
   }
   return angle;
 }
