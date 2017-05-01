@@ -2,6 +2,9 @@
  *  This code only uses the gyro sensor in the IMU.
  *  To stabilize the payload, we read the angular velocity in degrees per second, and integrate to obtain heading in degrees.
  *  With the heading, we use an algorithm to set the servo to the proper angle to rotate the box back to its initial heading.
+ *  
+ *  Note that the sensitivity of the Gyro is set in ~/Arduino/libraries/SparkFun_MPU9250/src/MPU9250.h
+ *  The current sensitivity value is 250 degrees per second.
  */
  
 // Initial IMU code obtained from:
@@ -73,7 +76,8 @@ void loop()
 
     myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
 
-    // Calculate the gyro value into degrees per second.This depends on scale being set.
+    // Calculate the gyro value into degrees per second. This depends on scale being set.
+    // SCALE IS 250 DPS
     myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
     myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
     myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
@@ -99,7 +103,6 @@ void loop()
       myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
       myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
       myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
-      Serial.print("Gyro z: "); Serial.println(myIMU.gz);
     
       if (myIMU.gz - dc_offset > 0) {
         noiseTotal += (myIMU.gz - dc_offset);
@@ -110,6 +113,9 @@ void loop()
     }
     noise = noiseTotal / 500;
     Serial.print("Noise: "); Serial.println(noise, 4);
+
+    // INFINITE LOOP FOR TESTING NOISE VALUES.
+    while(1);
     baselineTesting = false;
   }
 
@@ -163,17 +169,16 @@ float getHeading(void) {
   // Dustin Starting Attempt to integrate integration code
   // 1st measures rotational velocity
 
-  //Every 10 ms, it takes a sample from the gyro:
+  // Every 10 ms, it takes a sample from the gyro:
   if(millis() - time > 10) {
-    time = millis(); //updates time to get the next sample
+    time = millis(); // Update time to get the next sample.
 
     rate = (myIMU.gz - dc_offset);
-//    rate = myIMU.gz;
 
-    // Measuring the Angle:
-    // previous rate + rate * sampleTime / 2
     if (rate >= noise || rate <= -noise) {
-      heading += (prev_rate + rate) / 2.0;
+      // Trapezoidal method of integration:
+      // Average of the two values * time between samples.
+      heading += ((prev_rate + rate)/ 2.0) * 0.01) ;
     }
     //Making the rate into prev_rate for next loop:
     prev_rate = rate;
@@ -337,5 +342,6 @@ void initIMU(void) {
     Serial.flush();
     abort();
   }
+  Serial.println(""); Serial.println("STARTING LOOP()"); Serial.println("");
 }
 
