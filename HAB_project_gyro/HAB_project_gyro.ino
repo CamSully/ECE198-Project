@@ -43,7 +43,8 @@ int myLed  = 13;  // Set up pin 13 led for toggling
 // Global vars used in loop() and stabilize().
 int count = 0;
 int firstTime = 1;
-float desiredHeading;
+// Desired heading is 0 for gyro.
+float desiredHeading = 0;
 bool jumpedRTL = false;
 bool jumpedLTR = false;
 float previousHeading;
@@ -127,8 +128,14 @@ void loop()
   // INTEGRATE TO GET HEADING.
   headingDegrees = getHeading();
 
+  if (firstTime) {
+    previousHeading = headingDegrees;
+    firstTime = 0;
+  }
+
   // STABILIZE
-  // stabilize(headingDegrees);
+  stabilize(headingDegrees);
+  previousHeading = headingDegrees;
 
   if (!AHRS)
   {
@@ -143,6 +150,7 @@ void loop()
 //        Serial.print(" ");
         Serial.print("Z: "); Serial.print(myIMU.gz, 3);
         Serial.println("   deg/s");
+        Serial.print("Desired Heading: "); Serial.println(desiredHeading);
         Serial.print("Heading: "); Serial.println(headingDegrees);
         Serial.println(" ");
 
@@ -256,19 +264,19 @@ void stabilize(float heading) {
     servoReading = servo.read();
   }
 
-    // Print every second (count is global).
-  if ((count % 100) == 0) {
-    Serial.print("Heading: "); Serial.println(heading); Serial.println("");
-    if (jumpedRTL) {
-      Serial.println("jumpedRTL TRUE");
-    }
-    if (jumpedLTR) {
-      Serial.println("jumpedLTR TRUE");
-    }
+//    // Print every second (count is global).
+//  if ((count % 100) == 0) {
+//    Serial.print("Heading: "); Serial.println(heading); Serial.println("");
+//    if (jumpedRTL) {
+//      Serial.println("jumpedRTL TRUE");
+//    }
+//    if (jumpedLTR) {
+//      Serial.println("jumpedLTR TRUE");
+//    }
 //    Serial.print("Heading difference: "); Serial.println(headingDiff);
 //    Serial.print("Servo angle: "); Serial.println(servoReading);
-    Serial.println("");
-  }
+//    Serial.println("");
+//  }
 }
 
 
