@@ -56,9 +56,13 @@ void setup()
 }
 
 
+
 bool baselineTesting = true;
 float dc_offset = 0;
+float noise = 0;
+float noiseTotal = 0;
 float headingDegrees;
+
 void loop()
 {
   
@@ -77,14 +81,35 @@ void loop()
 
   //Calculating intial DC offset and noise level of gyro
   if (baselineTesting) {
-    for(int n = 0; n < 500; n++){
+    for(int n = 0; n < 500; n++) {
+      myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
+      myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
+      myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
+      myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
+    
       dc_offset += myIMU.gz;
     }
     dc_offset /= 500;
   
     //print dc offset and noise level
-    Serial.print("DC Offset: "); Serial.print(dc_offset);
-    Serial.println();
+    Serial.print("DC Offset: "); Serial.println(dc_offset, 4);
+
+    for (int i = 1; i <= 500; i++) {
+      myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
+      myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
+      myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
+      myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
+      Serial.print("Gyro z: "); Serial.println(myIMU.gz);
+    
+      if (myIMU.gz - dc_offset > 0) {
+        noiseTotal += (myIMU.gz - dc_offset);
+      }
+      else if (myIMU.gz - dc_offset < 0) {
+        noiseTotal += -(myIMU.gz - dc_offset);
+      }
+    }
+    noise = noiseTotal / 500;
+    Serial.print("Noise: "); Serial.println(noise, 4);
     baselineTesting = false;
   }
 
@@ -128,10 +153,12 @@ void loop()
 }
 
 
+
 float prev_rate = 0;
-float angle = 0;
+float heading = 0;
 unsigned long time = millis();
 float rate;
+
 float getHeading(void) {
   // Dustin Starting Attempt to integrate integration code
   // 1st measures rotational velocity
@@ -140,23 +167,25 @@ float getHeading(void) {
   if(millis() - time > 10) {
     time = millis(); //updates time to get the next sample
 
-//    rate = (myIMU.gz - dc_offset);
-    rate = myIMU.gz;
+    rate = (myIMU.gz - dc_offset);
+//    rate = myIMU.gz;
 
     // Measuring the Angle:
     // previous rate + rate * sampleTime / 2
-    angle += (prev_rate + rate) / 2.0;
+    if (rate >= noise || rate <= -noise) {
+      heading += (prev_rate + rate) / 2.0;
+    }
     //Making the rate into prev_rate for next loop:
     prev_rate = rate;
     // Keeps angle between 0-359 degrees:
-    if(angle < 0){
-        angle += 360;
+    if(heading < 0){
+        heading += 360;
     }
-    else if(angle >= 360){
-      angle -= 360;
+    else if(heading >= 360){
+      heading -= 360;
     }
   }
-  return angle;
+  return heading;
 }
 
 
