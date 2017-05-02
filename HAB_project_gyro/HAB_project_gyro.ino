@@ -54,9 +54,12 @@ float rate;
 // Variables used in stabilize().
 // Desired heading is 0 for gyro.
 float desiredHeading = 0;
-bool jumpedRTL = false;
-bool jumpedLTR = false;
-float previousHeading;
+bool jumpedRTL_getHeading = false;
+bool jumpedLTR_getHeading = false;
+bool jumpedRTL_stabil = false;
+bool jumpedLTR_stabil = false;
+float previousHeading_y;
+float previousHeading_z;
 
 
 
@@ -150,6 +153,7 @@ void loop()
 
   // INITIAL: WAIT FOR BOX TO BE VERTICAL, THEN START STABILIZING.
   int count = 0;
+  previousHeading_y = getHeading(myIMU.gy, noise_y);
   while (payloadHorizontal) {
     myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
     myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
@@ -158,17 +162,19 @@ void loop()
     if ((count % 1000) == 0) {
       Serial.println("Waiting for the box to be vertical...");
       Serial.print("Y-axis heading: "); Serial.println(yHeading);
+      Serial.print("Y-headingDiff: "); Serial.println(getHeadingDiff(yHeading));
     }
 
-    // FIX THIS.
-    if (yHeading > 90 || yHeading < 270) {
+    if (getHeadingDiff(yHeading) > 70 || getHeadingDiff(yHeading) < -70) {
+      previousHeading_y = getHeading(myIMU.gy, noise_y);
       payloadHorizontal = false;
-      Serial.print("Y-axis heading: "); Serial.println(yHeading);
+      Serial.print("Y-axis headingDiff: "); Serial.println(getHeadingDiff(yHeading));
       Serial.println("PAYLOAD IS VERTICAL"); Serial.println(" ");
-        // Reset variables for z integration.
-        prev_rate = 0;
-        heading = 0;
-        time = millis();
+      // Reset variables for z integration.
+      prev_rate = 0;
+      heading = 0;
+      time = millis();
+      delay(5000);
       break;
     }
     count++;
@@ -179,11 +185,11 @@ void loop()
 
   // STABILIZE
   if (firstTimeStabilize) {
-    previousHeading = zHeading;
+    previousHeading_z = zHeading;
     firstTimeStabilize = false;
   }
   stabilize(zHeading);
-  previousHeading = zHeading;
+  previousHeading_z = zHeading;
 
   if (!AHRS)
   {
@@ -253,40 +259,49 @@ float getHeading(float axisAngularVelo, float axisNoise) {
 
 
 
+float getHeadingDiff(float heading) {
+    
+  float headingDiff;
+
+  if (heading < 180) {
+    headingDiff = heading;
+  }
+  else {
+    headingDiff = 360 - heading;
+  }
+
+  return headingDiff;
+}
+
 void stabilize(float heading) {
-    int servoReading;
   
   float headingDiff = heading - desiredHeading;
-  float change = heading - previousHeading;
+  float change = heading - previousHeading_z;
 
   // Cases:
-  // JumpedRTL && desiredHeading < 180
-  // JumpedRTL && desiredHeading > 180
-  // JumpedLTR && desiredHeading < 180
-  // JumpedLTR && desiredHeading > 180
+  // jumpedRTL_stabil && desiredHeading < 180
+  // jumpedRTL_stabil && desiredHeading > 180
+  // jumpedLTR_stabil && desiredHeading < 180
+  // jumpedLTR_stabil && desiredHeading > 180
 
   if (change < -350) {
     Serial.println("JUMPED LTR");
-    jumpedLTR = true;
-    jumpedRTL = false;
+    jumpedLTR_stabil = true;
+    jumpedRTL_stabil = false;
   }
   if (change > 350) {
     Serial.println("JUMPED RTL");
-    jumpedRTL = true;
-    jumpedLTR = false;
+    jumpedRTL_stabil = true;
+    jumpedLTR_stabil = false;
   }
 
-  if (jumpedRTL) {
+  if (jumpedRTL_stabil) {
     if (desiredHeading < 180) {
       headingDiff = -((360 - heading) + desiredHeading);
     }
-    // desiredHeading > 180
-//    else {
-//      headingDiff = desiredHeading - zHeading;
-//    }
   }
 
-  if (jumpedLTR) {
+  if (jumpedLTR_stabil) {
     if (desiredHeading < 180) {
       headingDiff = heading - desiredHeading;
     }
@@ -306,7 +321,6 @@ void stabilize(float heading) {
     else {
       servo.write(90 + ((-headingDiff) / 2));
     }
-    servoReading = servo.read();
   }
 }
 
