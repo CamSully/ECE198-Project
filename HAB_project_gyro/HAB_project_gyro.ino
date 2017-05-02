@@ -46,10 +46,14 @@ bool payloadHorizontal = true;
 bool firstTimeStabilize = true;
 
 // Variables used in getHeading.
-float prev_rate = 0;
-float heading = 0;
-unsigned long time = millis();
-float rate;
+float prev_rate_y = 0;
+float heading_y = 0;
+unsigned long time_y = millis();
+float rate_y;
+float prev_rate_z = 0;
+float heading_z = 0;
+unsigned long time_z = millis();
+float rate_z;
 
 // Variables used in stabilize().
 // Desired heading is 0 for gyro.
@@ -153,11 +157,11 @@ void loop()
 
   // INITIAL: WAIT FOR BOX TO BE VERTICAL, THEN START STABILIZING.
   int count = 0;
-  previousHeading_y = getHeading(myIMU.gy, noise_y);
+  previousHeading_y = getYHeading();
   while (payloadHorizontal) {
     myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
     myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
-    yHeading = getHeading(myIMU.gy, noise_y);
+    yHeading = getYHeading();
 
     if ((count % 1000) == 0) {
       Serial.println("Waiting for the box to be vertical...");
@@ -165,23 +169,23 @@ void loop()
       Serial.print("Y-headingDiff: "); Serial.println(getHeadingDiff(yHeading));
     }
 
-    if (getHeadingDiff(yHeading) > 70 || getHeadingDiff(yHeading) < -70) {
-      previousHeading_y = getHeading(myIMU.gy, noise_y);
+    if (getHeadingDiff(yHeading) > 80 || getHeadingDiff(yHeading) < -80) {
+      previousHeading_y = getYHeading();
       payloadHorizontal = false;
       Serial.print("Y-axis headingDiff: "); Serial.println(getHeadingDiff(yHeading));
       Serial.println("PAYLOAD IS VERTICAL"); Serial.println(" ");
       // Reset variables for z integration.
-      prev_rate = 0;
-      heading = 0;
-      time = millis();
+      prev_rate_y = 0;
+     heading_y = 0;
+      time_y = 0;
       delay(5000);
       break;
     }
     count++;
   }
-
+  
   // INTEGRATE TO GET HEADING on the z axis (yaw).
-  zHeading = getHeading(myIMU.gz, noise_z);
+  zHeading = getZHeading();
 
   // STABILIZE
   if (firstTimeStabilize) {
@@ -223,40 +227,75 @@ void loop()
 
 
 
-// prev_rate, heading, time, rate are globals defined above.
-// NOTE that variable heading is initialized as 0.
-float getHeading(float axisAngularVelo, float axisNoise) {
+// prev_rate_y, heading, time, rate are globals defined above.
+// NOTE that variable heading_y is initialized as 0.
+float getYHeading(void) {
   // Dustin Starting Attempt to integrate integration code
   // 1st measures rotational velocity
 
   // Every 10 ms, it takes a sample from the gyro:
-  float changeInTime = millis() - time;
+  float changeInTime = millis() - time_y;
 //  Serial.println("deltaT= "); Serial.println(changeInTime);
   if(changeInTime > 5) {
 //    Serial.print("RUN -> deltaT = "); Serial.println(changeInTime);
-    time = millis(); // Update time to get the next sample.
+    time_y = millis(); // Update time to get the next sample.
 
     // Make rate negative for clockwise to be positive values.
-    rate = -(axisAngularVelo - dc_offset_z);
+    rate_y = -(myIMU.gy - dc_offset_y);
 
-    if (rate >= axisNoise || rate <= -axisNoise) {
+    if (rate_y >= noise_y || rate_y <= -noise_y) {
       // Trapezoidal method of integration:
       // Average of the two values * time between samples.
-      heading += ((prev_rate + rate)/ 2.0) * (changeInTime / 1000);
+     heading_y += ((prev_rate_y + rate_y)/ 2.0) * (changeInTime / 1000);
     }
-    //Making the rate into prev_rate for next loop:
-    prev_rate = rate;
+    //Making the rate into prev_rate_y for next loop:
+    prev_rate_y = rate_y;
     // Keeps angle between 0-359 degrees:
-    if(heading < 0){
-        heading += 360;
+    if(heading_y < 0){
+       heading_y += 360;
     }
-    else if(heading >= 360){
-      heading -= 360;
+    else if(heading_y >= 360){
+     heading_y -= 360;
     }
   }
-  return heading;
+  return heading_y;
 }
 
+
+
+// prev_rate, heading, time, rate_z are globals defined above.
+// NOTE that variable heading is initialized as 0.
+float getZHeading(void) {
+  // Dustin Starting Attempt to integrate integration code
+  // 1st measures rotational velocity
+
+  // Every 10 ms, it takes a sample from the gyro:
+  float changeInTime = millis() - time_z;
+//  Serial.println("deltaT= "); Serial.println(changeInTime);
+  if(changeInTime > 5) {
+//    Serial.print("RUN -> deltaT = "); Serial.println(changeInTime);
+    time_z = millis(); // Update time to get the next sample.
+
+    // Make rate negative for clockwise to be positive values.
+    rate_z = -(myIMU.gz - dc_offset_z);
+
+    if (rate_z >= noise_z || rate_z <= -noise_z) {
+      // Trapezoidal method of integration:
+      // Average of the two values * time between samples.
+      heading_z += ((prev_rate_z + rate_z)/ 2.0) * (changeInTime / 1000);
+    }
+    //Making the rate into prev_rate for next loop:
+    prev_rate_z = rate_z;
+    // Keeps angle between 0-359 degrees:
+    if(heading_z < 0){
+        heading_z += 360;
+    }
+    else if(heading_z >= 360){
+      heading_z -= 360;
+    }
+  }
+  return heading_z;
+}
 
 
 float getHeadingDiff(float heading) {
