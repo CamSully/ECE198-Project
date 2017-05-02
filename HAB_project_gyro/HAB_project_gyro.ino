@@ -32,24 +32,31 @@
 #include "quaternionFilters.h"
 #include "MPU9250.h"
 #include <Servo.h>
-Servo servo;
-
 #define AHRS false         // Set to false for basic data read
+Servo servo;
+MPU9250 myIMU;
 
 // Pin definitions
 int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
 int myLed  = 13;  // Set up pin 13 led for toggling
 
-// Global vars used in loop() and stabilize().
-int count = 0;
-int firstTime = 1;
+// Boolean for when the system is first powered on. The payload will start horizontal and then become vertical.
+bool payloadHorizontal = true;
+// Boolean used to set previousHeading before stabilizing the first time.
+bool firstTimeStabilize = true;
+
+// Variables used in getHeading.
+float prev_rate = 0;
+float heading = 0;
+unsigned long time = millis();
+float rate;
+
+// Variables used in stabilize().
 // Desired heading is 0 for gyro.
 float desiredHeading = 0;
 bool jumpedRTL = false;
 bool jumpedLTR = false;
 float previousHeading;
-
-MPU9250 myIMU;
 
 
 
@@ -62,14 +69,19 @@ void setup()
 
 
 bool baselineTesting = true;
-float dc_offset = 0;
-float noise = 0;
-float noiseTotal = 0;
-float headingDegrees;
+float dc_offset_y = 0;
+float dc_offset_z = 0;
+float noise_y = 0;
+float noise_z = 0;
+float noiseTotal_y = 0;
+float noiseTotal_z = 0;
+// Y-axis heading (for horizontal-to-vertical).
+float yHeading;
+// Z-axis heading.
+float zHeading;
 
 void loop()
-{
-  
+{ 
   // If intPin goes high, all data registers have new data
   // On interrupt, check if data ready interrupt
   if (myIMU.readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01)
@@ -82,7 +94,7 @@ void loop()
     myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
     myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
     myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
-  } // if (readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01)
+  }
 
   //Calculating intial DC offset and noise level of gyro
   if (baselineTesting) {
@@ -91,31 +103,44 @@ void loop()
       myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
       myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
       myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
-    
-      dc_offset += myIMU.gz;
+
+      dc_offset_y += myIMU.gy;
+      dc_offset_z += myIMU.gz;
     }
-    dc_offset /= 500;
+    dc_offset_y /= 500;
+    dc_offset_z /= 500;
   
     //print dc offset and noise level
-    Serial.print("DC Offset: "); Serial.println(dc_offset, 4);
+    Serial.print("Y DC Offset: "); Serial.println(dc_offset_y, 4);
+    Serial.print("Z DC Offset: "); Serial.println(dc_offset_z, 4);
 
     for (int i = 1; i <= 500; i++) {
       myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
       myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
       myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
       myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
-    
-      if (myIMU.gz - dc_offset > 0) {
-        noiseTotal += (myIMU.gz - dc_offset);
+
+      if (myIMU.gy - dc_offset_y > 0) {
+        noiseTotal_y += (myIMU.gy - dc_offset_y);
       }
-      else if (myIMU.gz - dc_offset < 0) {
-        noiseTotal += -(myIMU.gz - dc_offset);
+      else if (myIMU.gy - dc_offset_y < 0) {
+        noiseTotal_y += -(myIMU.gy - dc_offset_y);
+      }
+    
+      if (myIMU.gz - dc_offset_z > 0) {
+        noiseTotal_z += (myIMU.gz - dc_offset_z);
+      }
+      else if (myIMU.gz - dc_offset_z < 0) {
+        noiseTotal_z += -(myIMU.gz - dc_offset_z);
       }
     }
-    noise = noiseTotal / 500;
+    noise_y = noiseTotal_y / 500;
+    noise_z = noiseTotal_z / 500;
     // Add .05 to average noise to get a better value with less drift.
-    noise += 0.05;
-    Serial.print("Noise: "); Serial.println(noise, 4); Serial.println(" ");
+    noise_y += 0.05;
+    noise_z += 0.05;
+    Serial.print("Y Noise: "); Serial.println(noise_y, 4);
+    Serial.print("Z Noise: "); Serial.println(noise_z, 4); Serial.println(" ");
 
     baselineTesting = false;
   }
@@ -124,18 +149,41 @@ void loop()
   myIMU.updateTime();
 
   // INITIAL: WAIT FOR BOX TO BE VERTICAL, THEN START STABILIZING.
+  int count = 0;
+  while (payloadHorizontal) {
+    myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
+    myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
+    yHeading = getHeading(myIMU.gy, noise_y);
 
-  // INTEGRATE TO GET HEADING.
-  headingDegrees = getHeading();
+    if ((count % 1000) == 0) {
+      Serial.println("Waiting for the box to be vertical...");
+      Serial.print("Y-axis heading: "); Serial.println(yHeading);
+    }
 
-  if (firstTime) {
-    previousHeading = headingDegrees;
-    firstTime = 0;
+    // FIX THIS.
+    if (yHeading > 90 || yHeading < 270) {
+      payloadHorizontal = false;
+      Serial.print("Y-axis heading: "); Serial.println(yHeading);
+      Serial.println("PAYLOAD IS VERTICAL"); Serial.println(" ");
+        // Reset variables for z integration.
+        prev_rate = 0;
+        heading = 0;
+        time = millis();
+      break;
+    }
+    count++;
   }
 
+  // INTEGRATE TO GET HEADING on the z axis (yaw).
+  zHeading = getHeading(myIMU.gz, noise_z);
+
   // STABILIZE
-  stabilize(headingDegrees);
-  previousHeading = headingDegrees;
+  if (firstTimeStabilize) {
+    previousHeading = zHeading;
+    firstTimeStabilize = false;
+  }
+  stabilize(zHeading);
+  previousHeading = zHeading;
 
   if (!AHRS)
   {
@@ -151,7 +199,7 @@ void loop()
         Serial.print("Z: "); Serial.print(myIMU.gz, 3);
         Serial.println("   deg/s");
         Serial.print("Desired Heading: "); Serial.println(desiredHeading);
-        Serial.print("Heading: "); Serial.println(headingDegrees);
+        Serial.print("Heading: "); Serial.println(zHeading);
         Serial.println(" ");
 
         myIMU.tempCount = myIMU.readTempData();  // Read the adc values
@@ -169,12 +217,9 @@ void loop()
 
 
 
-float prev_rate = 0;
-float heading = 0;
-unsigned long time = millis();
-float rate;
-
-float getHeading(void) {
+// prev_rate, heading, time, rate are globals defined above.
+// NOTE that variable heading is initialized as 0.
+float getHeading(float axisAngularVelo, float axisNoise) {
   // Dustin Starting Attempt to integrate integration code
   // 1st measures rotational velocity
 
@@ -186,9 +231,9 @@ float getHeading(void) {
     time = millis(); // Update time to get the next sample.
 
     // Make rate negative for clockwise to be positive values.
-    rate = -(myIMU.gz - dc_offset);
+    rate = -(axisAngularVelo - dc_offset_z);
 
-    if (rate >= noise || rate <= -noise) {
+    if (rate >= axisNoise || rate <= -axisNoise) {
       // Trapezoidal method of integration:
       // Average of the two values * time between samples.
       heading += ((prev_rate + rate)/ 2.0) * (changeInTime / 1000);
@@ -237,7 +282,7 @@ void stabilize(float heading) {
     }
     // desiredHeading > 180
 //    else {
-//      headingDiff = desiredHeading - headingDegrees;
+//      headingDiff = desiredHeading - zHeading;
 //    }
   }
 
@@ -255,28 +300,14 @@ void stabilize(float heading) {
     if (headingDiff >= -90 && headingDiff <= 90) {
     // If the heading is to the right (between 1 and 90 degrees), move to the left.
     if (headingDiff > 0) {
-      servo.write(90 - headingDiff);
+      servo.write(90 - (headingDiff / 2));
     }
     // If the heading is to the left (between -90 and 0 degrees), move to the right.
     else {
-      servo.write(90 + (-headingDiff));
+      servo.write(90 + ((-headingDiff) / 2));
     }
     servoReading = servo.read();
   }
-
-//    // Print every second (count is global).
-//  if ((count % 100) == 0) {
-//    Serial.print("Heading: "); Serial.println(heading); Serial.println("");
-//    if (jumpedRTL) {
-//      Serial.println("jumpedRTL TRUE");
-//    }
-//    if (jumpedLTR) {
-//      Serial.println("jumpedLTR TRUE");
-//    }
-//    Serial.print("Heading difference: "); Serial.println(headingDiff);
-//    Serial.print("Servo angle: "); Serial.println(servoReading);
-//    Serial.println("");
-//  }
 }
 
 
