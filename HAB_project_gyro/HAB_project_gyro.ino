@@ -46,10 +46,10 @@ bool payloadHorizontal = true;
 bool firstTimeStabilize = true;
 
 // Variables used in getHeading.
-float prev_rate_y = 0;
-float heading_y = 0;
-unsigned long time_y = millis();
-float rate_y;
+float prev_rate_x = 0;
+float heading_x = 0;
+unsigned long time_x = millis();
+float rate_x;
 float prev_rate_z = 0;
 float heading_z = 0;
 unsigned long time_z = millis();
@@ -62,7 +62,7 @@ bool jumpedRTL_getHeading = false;
 bool jumpedLTR_getHeading = false;
 bool jumpedRTL_stabil = false;
 bool jumpedLTR_stabil = false;
-float previousHeading_y;
+float previousHeading_x;
 float previousHeading_z;
 
 
@@ -76,14 +76,14 @@ void setup()
 
 
 bool baselineTesting = true;
-float dc_offset_y = 0;
+float dc_offset_x = 0;
 float dc_offset_z = 0;
-float noise_y = 0;
+float noise_x = 0;
 float noise_z = 0;
-float noiseTotal_y = 0;
+float noiseTotal_x = 0;
 float noiseTotal_z = 0;
 // Y-axis heading (for horizontal-to-vertical).
-float yHeading;
+float xHeading;
 // Z-axis heading.
 float zHeading;
 
@@ -111,14 +111,14 @@ void loop()
       myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
       myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
 
-      dc_offset_y += myIMU.gy;
+      dc_offset_x += myIMU.gy;
       dc_offset_z += myIMU.gz;
     }
-    dc_offset_y /= 500;
+    dc_offset_x /= 500;
     dc_offset_z /= 500;
   
     //print dc offset and noise level
-    Serial.print("Y DC Offset: "); Serial.println(dc_offset_y, 4);
+    Serial.print("X DC Offset: "); Serial.println(dc_offset_x, 4);
     Serial.print("Z DC Offset: "); Serial.println(dc_offset_z, 4);
 
     for (int i = 1; i <= 500; i++) {
@@ -127,11 +127,11 @@ void loop()
       myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
       myIMU.gz = (float)myIMU.gyroCount[2] * myIMU.gRes;
 
-      if (myIMU.gy - dc_offset_y > 0) {
-        noiseTotal_y += (myIMU.gy - dc_offset_y);
+      if (myIMU.gx - dc_offset_x > 0) {
+        noiseTotal_x += (myIMU.gx - dc_offset_x);
       }
-      else if (myIMU.gy - dc_offset_y < 0) {
-        noiseTotal_y += -(myIMU.gy - dc_offset_y);
+      else if (myIMU.gx - dc_offset_x < 0) {
+        noiseTotal_x += -(myIMU.gx - dc_offset_x);
       }
     
       if (myIMU.gz - dc_offset_z > 0) {
@@ -141,12 +141,12 @@ void loop()
         noiseTotal_z += -(myIMU.gz - dc_offset_z);
       }
     }
-    noise_y = noiseTotal_y / 500;
+    noise_x = noiseTotal_x / 500;
     noise_z = noiseTotal_z / 500;
     // Add .05 to average noise to get a better value with less drift.
-    noise_y += 0.05;
+    noise_x += 0.05;
     noise_z += 0.05;
-    Serial.print("Y Noise: "); Serial.println(noise_y, 4);
+    Serial.print("X Noise: "); Serial.println(noise_x, 4);
     Serial.print("Z Noise: "); Serial.println(noise_z, 4); Serial.println(" ");
 
     baselineTesting = false;
@@ -157,27 +157,35 @@ void loop()
 
   // INITIAL: WAIT FOR BOX TO BE VERTICAL, THEN START STABILIZING.
   int count = 0;
-  previousHeading_y = getYHeading();
+  previousHeading_x = getXHeading();
   while (payloadHorizontal) {
     myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
+    myIMU.gx = (float)myIMU.gyroCount[0] * myIMU.gRes;
     myIMU.gy = (float)myIMU.gyroCount[1] * myIMU.gRes;
-    yHeading = getYHeading();
+    xHeading = getXHeading();
 
     if ((count % 1000) == 0) {
       Serial.println("Waiting for the box to be vertical...");
-      Serial.print("Y-axis heading: "); Serial.println(yHeading);
-      Serial.print("Y-headingDiff: "); Serial.println(getHeadingDiff(yHeading));
+      Serial.print("X-axis heading: "); Serial.println(xHeading);
+      Serial.print("X-headingDiff: "); Serial.println(getHeadingDiff(xHeading));
     }
-
-    if (getHeadingDiff(yHeading) > 80 || getHeadingDiff(yHeading) < -80) {
-      previousHeading_y = getYHeading();
+    
+    digitalWrite(myLed, 0);  // toggle led
+    
+    if (getHeadingDiff(xHeading) > 80 || getHeadingDiff(xHeading) < -80) {
+      previousHeading_x = getXHeading();
       payloadHorizontal = false;
-      Serial.print("Y-axis headingDiff: "); Serial.println(getHeadingDiff(yHeading));
       Serial.println("PAYLOAD IS VERTICAL"); Serial.println(" ");
       // Reset variables for z integration.
-      prev_rate_y = 0;
-     heading_y = 0;
-      time_y = 0;
+      prev_rate_x = 0;
+     heading_x = 0;
+      time_x = 0;
+      for (int i = 0; i < 10; i++) {
+        digitalWrite(myLed, !digitalRead(myLed));  // toggle led
+        delay(100);
+        digitalWrite(myLed, !digitalRead(myLed));  // toggle led
+        delay(100);
+      }
       delay(5000);
       break;
     }
@@ -204,7 +212,7 @@ void loop()
         // Print gyro values in degree/sec
 //        Serial.print("GYRO- X: "); Serial.print(myIMU.gx, 3);
 //        Serial.print(" ");
-//        Serial.print("Y: "); Serial.print(myIMU.gy, 3);
+//        Serial.print("x: "); Serial.print(myIMU.gy, 3);
 //        Serial.print(" ");
         Serial.print("Z: "); Serial.print(myIMU.gz, 3);
         Serial.println("   deg/s");
@@ -227,38 +235,38 @@ void loop()
 
 
 
-// prev_rate_y, heading, time, rate are globals defined above.
-// NOTE that variable heading_y is initialized as 0.
-float getYHeading(void) {
+// prev_rate_x, heading, time, rate are globals defined above.
+// NOTE that variable heading_x is initialized as 0.
+float getXHeading(void) {
   // Dustin Starting Attempt to integrate integration code
-  // 1st measures rotational velocity
+  // 1st measures rotational velocitx
 
   // Every 10 ms, it takes a sample from the gyro:
-  float changeInTime = millis() - time_y;
+  float changeInTime = millis() - time_x;
 //  Serial.println("deltaT= "); Serial.println(changeInTime);
   if(changeInTime > 5) {
 //    Serial.print("RUN -> deltaT = "); Serial.println(changeInTime);
-    time_y = millis(); // Update time to get the next sample.
+    time_x = millis(); // Update time to get the next sample.
 
     // Make rate negative for clockwise to be positive values.
-    rate_y = -(myIMU.gy - dc_offset_y);
+    rate_x = -(myIMU.gx - dc_offset_x);
 
-    if (rate_y >= noise_y || rate_y <= -noise_y) {
+    if (rate_x >= noise_x || rate_x <= -noise_x) {
       // Trapezoidal method of integration:
       // Average of the two values * time between samples.
-     heading_y += ((prev_rate_y + rate_y)/ 2.0) * (changeInTime / 1000);
+     heading_x += ((prev_rate_x + rate_x)/ 2.0) * (changeInTime / 1000);
     }
-    //Making the rate into prev_rate_y for next loop:
-    prev_rate_y = rate_y;
+    //Making the rate into prev_rate_x for next loop:
+    prev_rate_x = rate_x;
     // Keeps angle between 0-359 degrees:
-    if(heading_y < 0){
-       heading_y += 360;
+    if(heading_x < 0){
+       heading_x += 360;
     }
-    else if(heading_y >= 360){
-     heading_y -= 360;
+    else if(heading_x >= 360){
+     heading_x -= 360;
     }
   }
-  return heading_y;
+  return heading_x;
 }
 
 
