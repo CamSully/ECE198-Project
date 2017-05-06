@@ -1,4 +1,12 @@
-// Cameron and Dustin's Arduino code for the Sparkfun MPU9250 Inertial Measurement Unit
+/* Cameron and Dustin's Arduino code for the Sparkfun MPU9250 Inertial Measurement Unit.
+ * We wanted to use this sensor to provide a highly accurate heading reading.
+ * We thought the heading would be accurate because of the use of an accelerometer, gyro, and magnetometer to find the heading.
+ * However, we had issues with getting consistent heading readings, so we ended up only using the gyro, not all three sensors.
+ * We also had trouble understanding the very complicated code that powers the IMU.
+ * The following code was just used to read the values from the IMU.
+ */
+
+
 // Initial code obtained from:
 /* by: Kris Winer
  date: April 1, 2014
@@ -20,8 +28,6 @@
  GND ---------------------- GND
  AD0 ---- GND
  */
-
-//TODO: diagnose commented error, clean up code, add servo code.
 
 #include "quaternionFilters.h"
 #include "MPU9250.h"
@@ -93,7 +99,7 @@ void setup()
     Serial.print(" I should be 0x");
     Serial.println(0x48, HEX);
 
-// For some reason, this if statement causes the program to stop working. My theory is that this statement is for SPI.
+// ECE198: For some reason, this if statement causes the program to stop working. My theory is that this statement is for SPI.
 //    if (d != 0x48)
 //    {
 //      // Communication failed, stop here
@@ -266,25 +272,25 @@ void loop()
     {
       if(SerialDebug)
       {
-//        Serial.print("accel x = ");  Serial.print((int)1000 * myIMU.ax);
-//        Serial.print(" accel y = "); Serial.print((int)1000 * myIMU.ay);
-//        Serial.print(" accel z = "); Serial.print((int)1000 * myIMU.az);
-//        Serial.println(" mg");
-//
-//        Serial.print("gyro x = ");  Serial.print(myIMU.gx, 2);
-//        Serial.print(" gyro y = "); Serial.print(myIMU.gy, 2);
-//        Serial.print(" gyro z = "); Serial.print(myIMU.gz, 2);
-//        Serial.println(" deg/s");
+        Serial.print("accel x = ");  Serial.print((int)1000 * myIMU.ax);
+        Serial.print(" accel y = "); Serial.print((int)1000 * myIMU.ay);
+        Serial.print(" accel z = "); Serial.print((int)1000 * myIMU.az);
+        Serial.println(" mg");
+
+        Serial.print("gyro x = ");  Serial.print(myIMU.gx, 2);
+        Serial.print(" gyro y = "); Serial.print(myIMU.gy, 2);
+        Serial.print(" gyro z = "); Serial.print(myIMU.gz, 2);
+        Serial.println(" deg/s");
 
         Serial.print("magnetic x = ");  Serial.print((int)myIMU.mx);
         Serial.print(" magnetic y = "); Serial.print((int)myIMU.my);
         Serial.print(" magnetic z = "); Serial.print((int)myIMU.mz);
         Serial.println(" mG");
-//
-//        Serial.print("quat0 = ");  Serial.print(*getQ());
-//        Serial.print(" quat x = "); Serial.print(*(getQ() + 1));
-//        Serial.print(" quat y = "); Serial.print(*(getQ() + 2));
-//        Serial.print(" quat z = "); Serial.println(*(getQ() + 3));
+
+        Serial.print("quat0 = ");  Serial.print(*getQ());
+        Serial.print(" quat x = "); Serial.print(*(getQ() + 1));
+        Serial.print(" quat y = "); Serial.print(*(getQ() + 2));
+        Serial.print(" quat z = "); Serial.println(*(getQ() + 3));
       }
 
 // Define output variables from updated quaternion---these are Tait-Bryan
